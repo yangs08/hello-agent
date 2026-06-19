@@ -30,11 +30,19 @@ def init_db() -> None:
                 filename TEXT NOT NULL,
                 content_type TEXT,
                 storage_path TEXT NOT NULL,
+                url TEXT NOT NULL,
                 size_bytes INTEGER NOT NULL,
                 created_at TEXT NOT NULL
             )
             """
         )
+        image_columns = {
+            row["name"]
+            for row in conn.execute("PRAGMA table_info(images)").fetchall()
+        }
+        if "url" not in image_columns:
+            conn.execute("ALTER TABLE images ADD COLUMN url TEXT")
+            conn.execute("UPDATE images SET url = '/images/' || id WHERE url IS NULL")
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS messages (
@@ -44,10 +52,9 @@ def init_db() -> None:
                 content TEXT NOT NULL,
                 content_type TEXT NOT NULL DEFAULT 'text',
                 content_text TEXT NOT NULL DEFAULT '',
-                image_id INTEGER,
+                url TEXT,
                 image_analysis TEXT,
-                created_at TEXT NOT NULL,
-                FOREIGN KEY(image_id) REFERENCES images(id)
+                created_at TEXT NOT NULL
             )
             """
         )
@@ -67,9 +74,9 @@ def init_db() -> None:
             conn.execute("ALTER TABLE messages ADD COLUMN content_text TEXT NOT NULL DEFAULT ''")
             conn.execute("UPDATE messages SET content_text = content WHERE content_text = ''")
             columns.add("content_text")
-        if "image_id" not in columns:
-            conn.execute("ALTER TABLE messages ADD COLUMN image_id INTEGER")
-            columns.add("image_id")
+        if "url" not in columns:
+            conn.execute("ALTER TABLE messages ADD COLUMN url TEXT")
+            columns.add("url")
         if "user_id" in columns:
             conn.execute(
                 """
@@ -80,10 +87,9 @@ def init_db() -> None:
                     content TEXT NOT NULL,
                     content_type TEXT NOT NULL DEFAULT 'text',
                     content_text TEXT NOT NULL DEFAULT '',
-                    image_id INTEGER,
+                    url TEXT,
                     image_analysis TEXT,
-                    created_at TEXT NOT NULL,
-                    FOREIGN KEY(image_id) REFERENCES images(id)
+                    created_at TEXT NOT NULL
                 )
                 """
             )
@@ -91,11 +97,11 @@ def init_db() -> None:
                 """
                 INSERT INTO messages_new (
                     id, session_id, role, content, content_type, content_text,
-                    image_id, image_analysis, created_at
+                    url, image_analysis, created_at
                 )
                 SELECT
                     id, session_id, role, content, content_type, content_text,
-                    image_id, image_analysis, created_at
+                    url, image_analysis, created_at
                 FROM messages
                 """
             )
@@ -114,12 +120,17 @@ def create_image(
     with connect() as conn:
         cursor = conn.execute(
             """
-            INSERT INTO images (session_id, filename, content_type, storage_path, size_bytes, created_at)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO images (session_id, filename, content_type, storage_path, url, size_bytes, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
-            (session_id, filename, content_type, storage_path, size_bytes, created_at),
+            (session_id, filename, content_type, storage_path, "", size_bytes, created_at),
         )
         image_id = cursor.lastrowid
+        url = f"/images/{image_id}"
+        conn.execute(
+            "UPDATE images SET url = ? WHERE id = ?",
+            (url, image_id),
+        )
 
     return ImageAsset(
         id=image_id,
@@ -127,6 +138,7 @@ def create_image(
         filename=filename,
         content_type=content_type,
         storage_path=storage_path,
+        url=url,
         size_bytes=size_bytes,
         created_at=created_at,
     )
@@ -137,15 +149,15 @@ def append_message(
     role: Literal["user", "assistant"],
     content_text: str,
     content_type: Literal["text", "image", "mixed"] = "text",
-    image_id: int | None = None,
+    url: str | None = None,
     image_analysis: str | None = None,
-) -> None:
+) -> int:
     with connect() as conn:
-        conn.execute(
+        cursor = conn.execute(
             """
             INSERT INTO messages (
                 session_id, role, content, content_type, content_text,
-                image_id, image_analysis, created_at
+                url, image_analysis, created_at
             )
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
@@ -155,10 +167,23 @@ def append_message(
                 content_text,
                 content_type,
                 content_text,
-                image_id,
+                url,
                 image_analysis,
                 utc_now(),
             ),
+        )
+        return cursor.lastrowid
+
+
+def update_image_analysis_by_url(url: str, image_analysis: str) -> None:
+    with connect() as conn:
+        conn.execute(
+            """
+            UPDATE messages
+            SET image_analysis = ?
+            WHERE url = ? AND image_analysis IS NULL
+            """,
+            (image_analysis, url),
         )
 
 
@@ -193,14 +218,14 @@ def list_messages(session_id: str) -> list[MessageRecord]:
                 m.role,
                 m.content_type,
                 m.content_text,
-                m.image_id,
+                m.url,
                 i.filename AS image_filename,
                 i.content_type AS image_content_type,
                 i.storage_path AS image_storage_path,
                 m.image_analysis,
                 m.created_at
             FROM messages m
-            LEFT JOIN images i ON i.id = m.image_id
+            LEFT JOIN images i ON i.url = m.url
             WHERE m.session_id = ?
             ORDER BY m.id ASC
             """,
@@ -214,7 +239,7 @@ def list_messages(session_id: str) -> list[MessageRecord]:
             role=row["role"],
             content_type=row["content_type"],
             content_text=row["content_text"],
-            image_id=row["image_id"],
+            url=row["url"],
             image_filename=row["image_filename"],
             image_content_type=row["image_content_type"],
             image_storage_path=row["image_storage_path"],
@@ -229,7 +254,7 @@ def get_image(image_id: int) -> ImageAsset | None:
     with connect() as conn:
         row = conn.execute(
             """
-            SELECT id, session_id, filename, content_type, storage_path, size_bytes, created_at
+            SELECT id, session_id, filename, content_type, storage_path, url, size_bytes, created_at
             FROM images
             WHERE id = ?
             """,
@@ -245,6 +270,33 @@ def get_image(image_id: int) -> ImageAsset | None:
         filename=row["filename"],
         content_type=row["content_type"],
         storage_path=row["storage_path"],
+        url=row["url"],
+        size_bytes=row["size_bytes"],
+        created_at=row["created_at"],
+    )
+
+
+def get_image_by_url(url: str) -> ImageAsset | None:
+    with connect() as conn:
+        row = conn.execute(
+            """
+            SELECT id, session_id, filename, content_type, storage_path, url, size_bytes, created_at
+            FROM images
+            WHERE url = ?
+            """,
+            (url,),
+        ).fetchone()
+
+    if not row:
+        return None
+
+    return ImageAsset(
+        id=row["id"],
+        session_id=row["session_id"],
+        filename=row["filename"],
+        content_type=row["content_type"],
+        storage_path=row["storage_path"],
+        url=row["url"],
         size_bytes=row["size_bytes"],
         created_at=row["created_at"],
     )

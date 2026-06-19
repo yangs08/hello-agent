@@ -7,10 +7,13 @@
 - 普通厨房对话：寒暄、能力说明、饮食偏好补充、烹饪常识问答。
 - 图片识别：支持 `.jpg`、`.jpeg`、`.png`、`.webp`，最大 10MB。
 - Agent 自主判断：普通对话直接回应，输入不足时引导补充，输入足够时给私厨建议。
-- 私厨建议：结合文字、图片分析和会话上下文输出菜品建议。
+- 私厨建议：结合文字、会话上下文和按需图片分析输出菜品建议。
+- 图片工具调用：上传图片先保存资源，agent 需要视觉信息时再调用 `analyze_image` 工具分析。
+- Tavily 视频搜索：agent 知道食材后可调用 `web_search` 搜索料理视频候选，自己评估可行性并取前 3 个。
 - LangGraph SQLite 会话记忆：每个 `session_id` 对应一个独立会话窗口。
 - LangChain 压缩记忆：10 条消息后触发压缩，保留约 3000 token 上下文。
 - 本地资源存储：SQLite 数据和上传图片统一放在 `resource/` 目录。
+- 上传/对话分离：图片先通过 `/uploads` 换取 URL，`/chat` 只接收 URL。
 
 ## 目录结构
 
@@ -49,6 +52,7 @@ uv run uvicorn main:app --reload --host 0.0.0.0 --port 8000
 OLLAMA_BASE_URL=http://localhost:11434/v1
 AI_CHEF_VISION_MODEL=minicpm-v
 AI_CHEF_TEXT_MODEL=qwen2.5:7b
+TAVILY_API_KEY=your-tavily-api-key
 AI_CHEF_RESOURCE_DIR=./resource
 AI_CHEF_DB_PATH=./resource/ai_chef.sqlite3
 AI_CHEF_CHECKPOINT_DB_PATH=./resource/langgraph_checkpoints.sqlite3
@@ -62,7 +66,7 @@ AI_CHEF_CHECKPOINT_DB_PATH=./resource/langgraph_checkpoints.sqlite3
 
 - `session_id`: 会话 ID，默认 `default`。不同 `session_id` 拥有不同会话上下文。
 - `message`: 对话内容，可为空。
-- `file`: 可选图片。
+- `url`: 可选图片 URL，由 `/uploads` 返回。
 
 返回：
 
@@ -71,9 +75,36 @@ AI_CHEF_CHECKPOINT_DB_PATH=./resource/langgraph_checkpoints.sqlite3
   "status": "chat",
   "session_id": "default",
   "message": "本轮回复",
-  "image_id": 1,
+  "url": "/images/1",
   "ingredients_analysis": "图片分析",
   "recipe_suggestion": null
+}
+```
+
+### `POST /uploads`
+
+上传图片并返回可用于 `/chat` 的 URL。
+
+`multipart/form-data` 参数：
+
+- `session_id`: 会话 ID，默认 `default`。
+- `file`: 图片文件。
+
+返回：
+
+```json
+{
+  "url": "/images/1",
+  "image": {
+    "id": 1,
+    "session_id": "default",
+    "filename": "food.jpg",
+    "content_type": "image/jpeg",
+    "storage_path": ".../resource/uploads/xxx.jpg",
+    "url": "/images/1",
+    "size_bytes": 12345,
+    "created_at": "..."
+  }
 }
 ```
 
@@ -83,7 +114,7 @@ AI_CHEF_CHECKPOINT_DB_PATH=./resource/langgraph_checkpoints.sqlite3
 
 ### `GET /sessions/{session_id}/messages`
 
-列出某个会话窗口的产品侧历史记录，包括上传图片的 `image_id`、文件名、存储路径和图片分析。
+列出某个会话窗口的产品侧历史记录，包括图片 URL、文件名、存储路径和图片分析。图片分析在 agent 调用工具后才会回填。
 
 ### `GET /images/{image_id}`
 
