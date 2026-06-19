@@ -2,26 +2,43 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, Field
-
-
-class InputAssessment(BaseModel):
-    status: Literal["chef_ready", "chat", "needs_rephrase"]
-    reason: str = Field(description="Why this input landed in the status.")
-    normalized_request: str = Field(description="Cleaned user intent.")
-
-
-class ChefMemory(BaseModel):
-    preferences: list[str] = Field(default_factory=list)
-    dislikes: list[str] = Field(default_factory=list)
-    allergies: list[str] = Field(default_factory=list)
-    equipment: list[str] = Field(default_factory=list)
-    recent_ingredients: list[str] = Field(default_factory=list)
+from pydantic import BaseModel
 
 
 class ChatResponse(BaseModel):
-    status: Literal["chef_ready", "chat", "needs_rephrase"]
+    status: Literal["chat", "needs_rephrase"]
+    session_id: str
     message: str
-    memory: ChefMemory
+    image_id: int | None = None
     ingredients_analysis: str | None = None
     recipe_suggestion: str | None = None
+
+
+class SessionSummary(BaseModel):
+    session_id: str
+    message_count: int
+    last_message_at: str
+
+
+class ImageAsset(BaseModel):
+    id: int
+    session_id: str
+    filename: str
+    content_type: str | None = None
+    storage_path: str
+    size_bytes: int
+    created_at: str
+
+
+class MessageRecord(BaseModel):
+    id: int
+    session_id: str
+    role: str
+    content_type: str
+    content_text: str
+    image_id: int | None = None
+    image_filename: str | None = None
+    image_content_type: str | None = None
+    image_storage_path: str | None = None
+    image_analysis: str | None = None
+    created_at: str

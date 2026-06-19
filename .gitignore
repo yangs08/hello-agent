@@ -38,3 +38,7 @@ yarn-error.log*
 # 日志
 *.log
 logs/
+
+# Local app data
+ai_chef/resource/
+ai_chef/*.sqlite3

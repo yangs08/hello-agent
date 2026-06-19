@@ -6,9 +6,11 @@
 
 - 普通厨房对话：寒暄、能力说明、饮食偏好补充、烹饪常识问答。
 - 图片识别：支持 `.jpg`、`.jpeg`、`.png`、`.webp`，最大 10MB。
-- 输入路由：区分 `chef_ready`、`chat`、`needs_rephrase`。
-- 私厨建议：结合文字、图片分析、历史对话和长期记忆输出菜品建议。
-- SQLite 记忆：保存消息历史和用户偏好、忌口、过敏、厨具、近期食材。
+- Agent 自主判断：普通对话直接回应，输入不足时引导补充，输入足够时给私厨建议。
+- 私厨建议：结合文字、图片分析和会话上下文输出菜品建议。
+- LangGraph SQLite 会话记忆：每个 `session_id` 对应一个独立会话窗口。
+- LangChain 压缩记忆：10 条消息后触发压缩，保留约 3000 token 上下文。
+- 本地资源存储：SQLite 数据和上传图片统一放在 `resource/` 目录。
 
 ## 目录结构
 
@@ -17,13 +19,18 @@ ai_chef/
 ├── main.py              # FastAPI 应用入口，只负责装配 app 和路由
 ├── app/
 │   ├── config.py        # 环境变量、模型名、文件限制、数据库路径
-│   ├── db.py            # SQLite 初始化、消息历史、长期记忆读写
+│   ├── db.py            # SQLite 初始化、审计消息、会话列表
 │   ├── schemas.py       # 请求流程中使用的 Pydantic 数据结构
 │   ├── api/
 │   │   └── routes.py    # HTTP API 路由
 │   └── services/
-│       ├── chef.py      # 私厨对话编排、输入判断、建议生成、记忆更新
-│       └── image.py     # 图片校验和编码
+│       ├── chef.py      # LangChain agent 编排、输入判断、建议生成、会话记忆
+│       ├── image.py     # 图片校验和编码
+│       └── storage.py   # 上传图片文件持久化
+├── resource/            # 本地运行数据，默认不提交
+│   ├── ai_chef.sqlite3
+│   ├── langgraph_checkpoints.sqlite3
+│   └── uploads/
 ├── README.md
 ├── TASK.md
 ├── pyproject.toml
@@ -42,7 +49,9 @@ uv run uvicorn main:app --reload --host 0.0.0.0 --port 8000
 OLLAMA_BASE_URL=http://localhost:11434/v1
 AI_CHEF_VISION_MODEL=minicpm-v
 AI_CHEF_TEXT_MODEL=qwen2.5:7b
-AI_CHEF_DB_PATH=./ai_chef.sqlite3
+AI_CHEF_RESOURCE_DIR=./resource
+AI_CHEF_DB_PATH=./resource/ai_chef.sqlite3
+AI_CHEF_CHECKPOINT_DB_PATH=./resource/langgraph_checkpoints.sqlite3
 ```
 
 ## API
@@ -51,7 +60,7 @@ AI_CHEF_DB_PATH=./ai_chef.sqlite3
 
 `multipart/form-data` 参数：
 
-- `user_id`: 用户 ID，默认 `default`。
+- `session_id`: 会话 ID，默认 `default`。不同 `session_id` 拥有不同会话上下文。
 - `message`: 对话内容，可为空。
 - `file`: 可选图片。
 
@@ -59,23 +68,26 @@ AI_CHEF_DB_PATH=./ai_chef.sqlite3
 
 ```json
 {
-  "status": "chef_ready",
+  "status": "chat",
+  "session_id": "default",
   "message": "本轮回复",
-  "memory": {
-    "preferences": [],
-    "dislikes": [],
-    "allergies": [],
-    "equipment": [],
-    "recent_ingredients": []
-  },
+  "image_id": 1,
   "ingredients_analysis": "图片分析",
-  "recipe_suggestion": "私厨建议"
+  "recipe_suggestion": null
 }
 ```
 
-### `GET /memory/{user_id}`
+### `GET /sessions`
 
-读取用户长期记忆。
+列出已有会话窗口。
+
+### `GET /sessions/{session_id}/messages`
+
+列出某个会话窗口的产品侧历史记录，包括上传图片的 `image_id`、文件名、存储路径和图片分析。
+
+### `GET /images/{image_id}`
+
+读取上传图片原图。
 
 ### `POST /analyze`
 
