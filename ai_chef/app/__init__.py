@@ -1,0 +1,1 @@
+"""AI Chef application package."""

@@ -6,6 +6,7 @@ AI Agent 项目集合，包含多个独立的 AI 应用项目。
 
 | 项目 | 状态 | 说明 |
 |------|------|------|
+| [ai_chef](./ai_chef/) | 🚧 开发中 | 会话式 AI 私厨助手 |
 | [photo-score](./photo-score/) | 🚧 开发中 | 摄影图片点评系统 |
 
 ## 项目管理
@@ -16,7 +17,7 @@ AI Agent 项目集合，包含多个独立的 AI 应用项目。
 project-name/
 ├── README.md          # 项目说明
 ├── TASK.md           # 任务清单
-├── requirements.txt  # 依赖
+├── requirements.txt/pyproject.toml  # 依赖
 └── src/              # 源码
 ```
 
