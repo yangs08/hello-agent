@@ -45,15 +45,17 @@ def run_chef_agent(
 
 
 def stream_chef_agent(
-    message: str | list[dict[str, Any]],
-    thread_id: str,
+        message: str | list[dict[str, Any]],
+        thread_id: str,
 ) -> Iterator[str]:
     config = _agent_config(thread_id)
     for chunk, _metadata in chef_agent.stream(
-        {"messages": [{"role": "user", "content": message}]},
-        config=config,
-        stream_mode="messages",
+            {"messages": [{"role": "user", "content": message}]},
+            config=config,
+            stream_mode="messages",
     ):
-        text = _chunk_text(chunk)
-        if text:
-            yield text
+
+        try:
+            yield _chunk_text(chunk)
+        except Exception:
+            yield "信息检索失败，请试试手动输入实物"
