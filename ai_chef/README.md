@@ -14,7 +14,7 @@
 - LangChain 压缩记忆：10 条消息后触发压缩，保留约 3000 token 上下文。
 - LangSmith tracing：开启后可观察 agent、模型调用、工具调用和每个会话的 trace。
 - 本地资源存储：SQLite 数据和上传图片统一放在 `resource/` 目录。
-- 上传/对话分离：图片先通过 `/uploads` 换取 URL，`/chat` 只接收 URL。
+- 上传/对话分离：前端优先获取 OSS 临时凭证直传图片，再把 OSS URL 发给 `/chat`；`/uploads` 保留为本地开发/兜底。
 
 ## 目录结构
 
@@ -74,6 +74,25 @@ AI_CHEF_DB_PATH=./resource/ai_chef.sqlite3
 AI_CHEF_CHECKPOINT_DB_PATH=./resource/langgraph_checkpoints.sqlite3
 ```
 
+图片默认存本地 `resource/uploads`。如果要上传到阿里云 OSS：
+
+```bash
+AI_CHEF_STORAGE_BACKEND=oss
+ALIYUN_OSS_ENDPOINT=https://oss-cn-hangzhou.aliyuncs.com
+ALIYUN_OSS_BUCKET=your-bucket
+ALIYUN_OSS_ACCESS_KEY_ID=your-access-key-id
+ALIYUN_OSS_ACCESS_KEY_SECRET=your-access-key-secret
+ALIYUN_OSS_ROLE_ARN=acs:ram::1234567890:role/your-upload-role
+# 使用 STS 时配置
+ALIYUN_OSS_SECURITY_TOKEN=your-security-token
+# 可选：绑定 CDN 或自定义域名
+ALIYUN_OSS_PUBLIC_BASE_URL=https://cdn.example.com
+ALIYUN_OSS_OBJECT_PREFIX=ai-chef/uploads
+ALIYUN_OSS_STS_DURATION_SECONDS=1800
+```
+
+前端直传 OSS 需要在 OSS bucket 配置 CORS，至少允许你的前端 Origin、`POST` 方法，以及 `x-oss-security-token` 请求头。
+
 `LANGSMITH_TRACING=false` 时不会上报 trace；开启后，`/chat` 每次调用会用 `session_id` 写入 trace metadata，方便之后按会话窗口过滤。
 
 ## API
@@ -128,9 +147,53 @@ AI_CHEF_CHECKPOINT_DB_PATH=./resource/langgraph_checkpoints.sqlite3
 }
 ```
 
+### `POST /oss/upload-token`
+
+获取前端直传 OSS 的临时上传参数。
+
+```json
+{
+  "filename": "food.jpg",
+  "content_type": "image/jpeg"
+}
+```
+
+返回：
+
+```json
+{
+  "access_key_id": "...",
+  "security_token": "...",
+  "expiration": "...",
+  "policy": "...",
+  "signature": "...",
+  "bucket": "your-bucket",
+  "endpoint": "https://oss-cn-hangzhou.aliyuncs.com",
+  "object_key": "ai-chef/uploads/xxx.jpg",
+  "url": "https://your-bucket.oss-cn-hangzhou.aliyuncs.com/ai-chef/uploads/xxx.jpg"
+}
+```
+
+前端上传成功后调用 `POST /images/register` 保存图片记录。
+
+### `POST /images/register`
+
+登记已上传到 OSS 的图片。
+
+```json
+{
+  "session_id": "default",
+  "filename": "food.jpg",
+  "content_type": "image/jpeg",
+  "storage_path": "ai-chef/uploads/xxx.jpg",
+  "url": "https://your-bucket.oss-cn-hangzhou.aliyuncs.com/ai-chef/uploads/xxx.jpg",
+  "size_bytes": 12345
+}
+```
+
 ### `POST /uploads`
 
-上传图片并返回可用于 `/chat` 的 URL。
+服务端代传图片并返回可用于 `/chat` 的 URL。这个接口保留给本地开发或 OSS 直传失败时兜底。
 
 `multipart/form-data` 参数：
 
@@ -141,14 +204,14 @@ AI_CHEF_CHECKPOINT_DB_PATH=./resource/langgraph_checkpoints.sqlite3
 
 ```json
 {
-  "url": "/images/1",
+  "url": "https://your-bucket.oss-cn-hangzhou.aliyuncs.com/ai-chef/uploads/xxx.jpg",
   "image": {
     "id": 1,
     "session_id": "default",
     "filename": "food.jpg",
     "content_type": "image/jpeg",
-    "storage_path": ".../resource/uploads/xxx.jpg",
-    "url": "/images/1",
+    "storage_path": "ai-chef/uploads/xxx.jpg",
+    "url": "https://your-bucket.oss-cn-hangzhou.aliyuncs.com/ai-chef/uploads/xxx.jpg",
     "size_bytes": 12345,
     "created_at": "..."
   }

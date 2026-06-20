@@ -115,6 +115,7 @@ def create_image(
     content_type: str | None,
     storage_path: str,
     size_bytes: int,
+    url: str | None = None,
 ) -> ImageAsset:
     created_at = utc_now()
     with connect() as conn:
@@ -123,13 +124,13 @@ def create_image(
             INSERT INTO images (session_id, filename, content_type, storage_path, url, size_bytes, created_at)
             VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
-            (session_id, filename, content_type, storage_path, "", size_bytes, created_at),
+            (session_id, filename, content_type, storage_path, url or "", size_bytes, created_at),
         )
         image_id = cursor.lastrowid
-        url = f"/images/{image_id}"
+        image_url = url or f"/images/{image_id}"
         conn.execute(
             "UPDATE images SET url = ? WHERE id = ?",
-            (url, image_id),
+            (image_url, image_id),
         )
 
     return ImageAsset(
@@ -138,7 +139,7 @@ def create_image(
         filename=filename,
         content_type=content_type,
         storage_path=storage_path,
-        url=url,
+        url=image_url,
         size_bytes=size_bytes,
         created_at=created_at,
     )

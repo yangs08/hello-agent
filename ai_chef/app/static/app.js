@@ -121,6 +121,76 @@ createApp({
     async uploadImage() {
       if (!this.imageFile) return null;
 
+      try {
+        return await this.uploadImageToOss(this.imageFile);
+      } catch (error) {
+        console.warn("OSS direct upload failed, falling back to /uploads", error);
+        return this.uploadImageThroughServer();
+      }
+    },
+    async uploadImageToOss(file) {
+      const tokenResponse = await fetch("/oss/upload-token", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          filename: file.name || "image.jpg",
+          content_type: file.type || "application/octet-stream",
+        }),
+      });
+
+      if (!tokenResponse.ok) {
+        const detail = await tokenResponse.text();
+        throw new Error(detail || "OSS 上传凭证获取失败");
+      }
+
+      const token = await tokenResponse.json();
+      const form = new FormData();
+      form.append("key", token.object_key);
+      form.append("OSSAccessKeyId", token.access_key_id);
+      form.append("policy", token.policy);
+      form.append("Signature", token.signature);
+      form.append("x-oss-security-token", token.security_token);
+      form.append("success_action_status", "200");
+      form.append("Content-Type", file.type || "application/octet-stream");
+      form.append("file", file);
+
+      const uploadEndpoint = this.ossFormEndpoint(token);
+      const uploadResponse = await fetch(uploadEndpoint, {
+        method: "POST",
+        body: form,
+      });
+
+      if (!uploadResponse.ok) {
+        const detail = await uploadResponse.text();
+        throw new Error(detail || "OSS 图片上传失败");
+      }
+
+      const registerResponse = await fetch("/images/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          session_id: this.sessionId,
+          filename: file.name || "image.jpg",
+          content_type: file.type || null,
+          storage_path: token.object_key,
+          url: token.url,
+          size_bytes: file.size || 0,
+        }),
+      });
+
+      if (!registerResponse.ok) {
+        const detail = await registerResponse.text();
+        throw new Error(detail || "图片登记失败");
+      }
+
+      const data = await registerResponse.json();
+      return data.url;
+    },
+    ossFormEndpoint(token) {
+      const endpoint = token.endpoint.replace(/^https?:\/\//, "");
+      return `https://${token.bucket}.${endpoint}`;
+    },
+    async uploadImageThroughServer() {
       const form = new FormData();
       form.append("session_id", this.sessionId);
       form.append("file", this.imageFile);

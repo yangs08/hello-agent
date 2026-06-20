@@ -3,15 +3,25 @@ from __future__ import annotations
 import json
 from collections.abc import Iterator
 from pathlib import Path
+from urllib.parse import urlparse
 
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse, RedirectResponse, Response, StreamingResponse
 
 from app.db import create_image, get_image, list_messages, list_sessions
-from app.schemas import ChatRequest, ChatResponse, MessageRecord, SessionSummary, UploadResponse
+from app.schemas import (
+    ChatRequest,
+    ChatResponse,
+    ImageRegisterRequest,
+    MessageRecord,
+    OssUploadTokenRequest,
+    OssUploadTokenResponse,
+    SessionSummary,
+    UploadResponse,
+)
 from app.services.chef import handle_chat, stream_chat
 from app.services.image import validate_image
-from app.services.storage import save_upload
+from app.services.storage import create_oss_upload_token, save_upload
 
 router = APIRouter()
 
@@ -36,13 +46,16 @@ def get_session_messages(session_id: str) -> list[MessageRecord]:
 
 
 @router.api_route("/images/{image_id}", methods=["GET", "HEAD"])
-def get_image_file(image_id: int) -> FileResponse:
+def get_image_file(image_id: int) -> Response:
     image = get_image(image_id)
     if not image:
         raise HTTPException(status_code=404, detail="Image not found")
 
     path = Path(image.storage_path)
     if not path.exists():
+        parsed = urlparse(image.url)
+        if parsed.scheme in {"http", "https"}:
+            return RedirectResponse(image.url)
         raise HTTPException(status_code=404, detail="Image file not found")
 
     return FileResponse(
@@ -61,16 +74,52 @@ async def upload_image(
 ) -> UploadResponse:
     content = await file.read()
     validate_image(file.filename or "image.jpg", content)
-    storage_path = save_upload(file.filename or "image.jpg", content)
+    stored = save_upload(file.filename or "image.jpg", content, file.content_type)
     image = create_image(
         session_id=session_id.strip() or "default",
-        filename=file.filename or storage_path.name,
+        filename=file.filename or Path(stored.storage_path).name,
         content_type=file.content_type,
-        storage_path=str(storage_path),
+        storage_path=stored.storage_path,
         size_bytes=len(content),
+        url=stored.url,
     )
-    absolute_url = str(request.url_for("get_image_file", image_id=image.id))
-    return UploadResponse(url=absolute_url, image=image)
+    upload_url = image.url
+    if urlparse(upload_url).scheme not in {"http", "https"}:
+        upload_url = str(request.url_for("get_image_file", image_id=image.id))
+    return UploadResponse(url=upload_url, image=image)
+
+
+@router.post("/oss/upload-token", response_model=OssUploadTokenResponse)
+async def oss_upload_token(request: OssUploadTokenRequest) -> OssUploadTokenResponse:
+    try:
+        token = create_oss_upload_token(request.filename)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    return OssUploadTokenResponse(
+        access_key_id=token.access_key_id,
+        security_token=token.security_token,
+        expiration=token.expiration,
+        policy=token.policy,
+        signature=token.signature,
+        bucket=token.bucket,
+        endpoint=token.endpoint,
+        object_key=token.object_key,
+        url=token.url,
+    )
+
+
+@router.post("/images/register", response_model=UploadResponse)
+async def register_image(request: ImageRegisterRequest) -> UploadResponse:
+    image = create_image(
+        session_id=request.session_id.strip() or "default",
+        filename=request.filename,
+        content_type=request.content_type,
+        storage_path=request.storage_path,
+        size_bytes=request.size_bytes,
+        url=request.url,
+    )
+    return UploadResponse(url=image.url, image=image)
 
 
 @router.post("/chat", response_model=ChatResponse)

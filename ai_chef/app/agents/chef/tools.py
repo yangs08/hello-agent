@@ -111,10 +111,18 @@ def analyze_image_reference(url: str) -> str:
 
     if image:
         path = Path(image.storage_path)
-        if not path.exists():
+        if path.exists():
+            content = path.read_bytes()
+            mime_type = _mime_type_for_path(path)
+        elif urlparse(image.url).scheme in {"http", "https"}:
+            try:
+                with urlopen(image.url, timeout=20) as response:
+                    content = response.read()
+                    mime_type = response.headers.get_content_type() or image.content_type or "image/jpeg"
+            except (HTTPError, URLError, TimeoutError) as exc:
+                return f"无法读取图片 URL：{image.url}。错误：{exc}"
+        else:
             return f"图片文件不存在：{url}。请让用户重新上传。"
-        content = path.read_bytes()
-        mime_type = _mime_type_for_path(path)
     elif parsed_url.scheme in {"http", "https"}:
         try:
             with urlopen(url, timeout=20) as response:

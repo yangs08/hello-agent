@@ -61,6 +61,48 @@ class UploadResponse(BaseModel):
     image: ImageAsset
 
 
+class OssUploadTokenRequest(BaseModel):
+    filename: str
+    content_type: str | None = None
+
+    @field_validator("filename")
+    @classmethod
+    def validate_filename(cls, value: str) -> str:
+        filename = value.strip()
+        if not filename:
+            raise ValueError("filename cannot be empty")
+        return filename
+
+
+class OssUploadTokenResponse(BaseModel):
+    access_key_id: str
+    security_token: str
+    expiration: str
+    policy: str
+    signature: str
+    bucket: str
+    endpoint: str
+    object_key: str
+    url: str
+
+
+class ImageRegisterRequest(BaseModel):
+    session_id: str = "default"
+    filename: str
+    content_type: str | None = None
+    storage_path: str
+    url: str
+    size_bytes: int = 0
+
+    @field_validator("filename", "storage_path", "url")
+    @classmethod
+    def validate_required_string(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("field cannot be empty")
+        return normalized
+
+
 class MessageRecord(BaseModel):
     id: int
     session_id: str
