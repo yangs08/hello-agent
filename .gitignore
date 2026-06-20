@@ -42,3 +42,4 @@ logs/
 # Local app data
 ai_chef/resource/
 ai_chef/*.sqlite3
+ai_chef/.langgraph_api/

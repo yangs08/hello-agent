@@ -5,8 +5,8 @@ import os
 import unittest
 from uuid import uuid4
 
+from app.agents.chef import chef_agent
 from app.db import init_db
-from app.services.chef import chef_agent
 
 
 class RunAgentTest(unittest.TestCase):
