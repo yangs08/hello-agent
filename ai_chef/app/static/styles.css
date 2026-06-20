@@ -304,6 +304,7 @@ svg {
 
 .preview-chip {
   height: 48px;
+  max-width: 180px;
   border: 1px solid #f0c99f;
   border-radius: 8px;
   padding: 4px 6px 4px 4px;
@@ -313,11 +314,44 @@ svg {
   background: #fff8ef;
 }
 
+.preview-chip-uploading {
+  border-color: #fbbf24;
+}
+
+.preview-chip-ready {
+  border-color: #86efac;
+}
+
+.preview-chip-error {
+  border-color: #fca5a5;
+  background: #fff1f2;
+}
+
 .preview-chip img {
   width: 40px;
   height: 40px;
   border-radius: 6px;
   object-fit: cover;
+}
+
+.preview-status {
+  min-width: 0;
+  max-width: 82px;
+  overflow: hidden;
+  color: #7c6f66;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.preview-chip-ready .preview-status {
+  color: #15803d;
+}
+
+.preview-chip-error .preview-status {
+  color: #be123c;
 }
 
 .preview-chip button {

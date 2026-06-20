@@ -113,7 +113,10 @@ def create_oss_upload_token(filename: str) -> OssUploadToken:
     request.set_DurationSeconds(ALIYUN_OSS_STS_DURATION_SECONDS)
     request.set_Policy(json.dumps(policy))
 
-    response = client.do_action_with_exception(request)
+    try:
+        response = client.do_action_with_exception(request)
+    except Exception as exc:
+        raise RuntimeError(f"生成 OSS 临时上传凭证失败：{exc}") from exc
     data = json.loads(response.decode("utf-8"))
     credentials = data["Credentials"]
     post_policy = {

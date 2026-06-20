@@ -7,6 +7,10 @@ createApp({
       draft: "",
       imageFile: null,
       imagePreview: "",
+      uploadedImageUrl: "",
+      isUploadingImage: false,
+      imageUploadError: "",
+      imageUploadToken: 0,
       messages: [],
       isSending: false,
       typingQueues: {},
@@ -16,7 +20,9 @@ createApp({
   },
   computed: {
     canSend() {
-      return this.draft.trim().length > 0 || Boolean(this.imageFile);
+      const hasText = this.draft.trim().length > 0;
+      const hasReadyImage = Boolean(this.uploadedImageUrl);
+      return !this.isUploadingImage && !this.imageUploadError && (hasText || hasReadyImage);
     },
     showLoading() {
       const lastMessage = this.messages[this.messages.length - 1];
@@ -40,7 +46,7 @@ createApp({
     openFilePicker() {
       this.$refs.fileInput.click();
     },
-    selectImage(event) {
+    async selectImage(event) {
       const [file] = event.target.files;
       if (!file) return;
 
@@ -50,16 +56,25 @@ createApp({
         return;
       }
 
+      this.resetImageState(false);
       this.imageFile = file;
       this.imagePreview = URL.createObjectURL(file);
+      await this.uploadSelectedImage(file);
     },
-    clearImage() {
-      if (this.imagePreview) {
+    clearImage(clearInput = true, revokePreview = true) {
+      this.imageUploadToken += 1;
+      this.resetImageState(clearInput, revokePreview);
+    },
+    resetImageState(clearInput = true, revokePreview = true) {
+      if (revokePreview && this.imagePreview) {
         URL.revokeObjectURL(this.imagePreview);
       }
       this.imageFile = null;
       this.imagePreview = "";
-      if (this.$refs.fileInput) {
+      this.uploadedImageUrl = "";
+      this.isUploadingImage = false;
+      this.imageUploadError = "";
+      if (clearInput && this.$refs.fileInput) {
         this.$refs.fileInput.value = "";
       }
     },
@@ -118,14 +133,35 @@ createApp({
       }
       delete this.typingQueues[messageId];
     },
-    async uploadImage() {
-      if (!this.imageFile) return null;
+    async uploadSelectedImage(file) {
+      const token = this.imageUploadToken;
+      this.isUploadingImage = true;
+      this.imageUploadError = "";
+      this.uploadedImageUrl = "";
 
       try {
-        return await this.uploadImageToOss(this.imageFile);
+        const imageUrl = await this.uploadImage(file);
+        if (token === this.imageUploadToken) {
+          this.uploadedImageUrl = imageUrl;
+        }
+      } catch (error) {
+        if (token === this.imageUploadToken) {
+          this.imageUploadError = error.message || "图片上传失败，请重新选择。";
+        }
+      } finally {
+        if (token === this.imageUploadToken) {
+          this.isUploadingImage = false;
+        }
+      }
+    },
+    async uploadImage(file) {
+      if (!file) return null;
+
+      try {
+        return await this.uploadImageToOss(file);
       } catch (error) {
         console.warn("OSS direct upload failed, falling back to /uploads", error);
-        return this.uploadImageThroughServer();
+        return this.uploadImageThroughServer(file);
       }
     },
     async uploadImageToOss(file) {
@@ -190,10 +226,10 @@ createApp({
       const endpoint = token.endpoint.replace(/^https?:\/\//, "");
       return `https://${token.bucket}.${endpoint}`;
     },
-    async uploadImageThroughServer() {
+    async uploadImageThroughServer(file) {
       const form = new FormData();
       form.append("session_id", this.sessionId);
-      form.append("file", this.imageFile);
+      form.append("file", file);
 
       const response = await fetch("/uploads", {
         method: "POST",
@@ -227,7 +263,7 @@ createApp({
 
       const text = this.draft.trim();
       const imagePreview = this.imagePreview;
-      const imageFile = this.imageFile;
+      const imageUrl = this.uploadedImageUrl;
 
       this.messages.push({
         id: crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`,
@@ -237,23 +273,12 @@ createApp({
       });
 
       this.draft = "";
-      this.imageFile = null;
-      this.imagePreview = "";
-      if (this.$refs.fileInput) {
-        this.$refs.fileInput.value = "";
-      }
+      this.clearImage(true, false);
       this.isSending = true;
       this.scrollToBottom();
       let assistantMessage = null;
 
       try {
-        let imageUrl = null;
-        if (imageFile) {
-          this.imageFile = imageFile;
-          imageUrl = await this.uploadImage();
-          this.imageFile = null;
-        }
-
         assistantMessage = this.addAssistantMessage("");
         const response = await fetch("/chat/stream", {
           method: "POST",

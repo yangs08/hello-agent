@@ -101,8 +101,19 @@
             </svg>
           </button>
 
-          <div v-if="imagePreview" class="preview-chip">
+          <div
+            v-if="imagePreview"
+            class="preview-chip"
+            :class="{
+              'preview-chip-uploading': isUploadingImage,
+              'preview-chip-error': imageUploadError,
+              'preview-chip-ready': uploadedImageUrl
+            }"
+          >
             <img :src="imagePreview" alt="待发送图片预览" />
+            <span class="preview-status">
+              {{ imageUploadError || (isUploadingImage ? "上传中" : "已上传") }}
+            </span>
             <button type="button" @click="clearImage" aria-label="移除图片">×</button>
           </div>
 
@@ -119,7 +130,7 @@
           <button
             class="send-button"
             type="submit"
-            :disabled="isSending || !canSend"
+            :disabled="isSending || isUploadingImage || !canSend"
             aria-label="发送消息"
             title="发送"
           >
