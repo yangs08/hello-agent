@@ -105,8 +105,9 @@ def analyze_image_reference(url: str) -> str:
         content, mime_type = decoded_image
         return analyze_ingredients(content, mime_type=mime_type)
 
-    image = get_image_by_url(url)
     parsed_url = urlparse(url)
+    local_url = parsed_url.path if parsed_url.scheme in {"http", "https"} else url
+    image = get_image_by_url(url) or get_image_by_url(local_url)
 
     if image:
         path = Path(image.storage_path)
@@ -126,7 +127,7 @@ def analyze_image_reference(url: str) -> str:
 
     analysis = analyze_ingredients(content, mime_type=mime_type)
     if image:
-        update_image_analysis_by_url(url, analysis)
+        update_image_analysis_by_url(image.url, analysis)
     return analysis
 
 

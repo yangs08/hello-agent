@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>AI 私人厨师</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/styles.css" />
+    <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+  </head>
+  <body>
+    <div id="app" v-cloak>
+      <main class="shell" aria-label="AI 私人厨师">
+        <header class="topbar">
+          <div class="brand">
+            <div class="brand-mark" aria-hidden="true">
+              <svg viewBox="0 0 24 24" role="img">
+                <path d="M6 17.5h12" />
+                <path d="M7 21h10" />
+                <path d="M7 17.5v2.2A1.3 1.3 0 0 0 8.3 21h7.4a1.3 1.3 0 0 0 1.3-1.3v-2.2" />
+                <path d="M6.4 13.5A4.2 4.2 0 0 1 8 5.3 4.7 4.7 0 0 1 16 5.3a4.2 4.2 0 0 1 1.6 8.2" />
+                <path d="M6.4 13.5c.4.4.6.9.6 1.5v2.5" />
+                <path d="M17.6 13.5c-.4.4-.6.9-.6 1.5v2.5" />
+              </svg>
+            </div>
+            <div>
+              <h1>AI 私人厨师</h1>
+              <p>上传食材图片，获取个性化食谱推荐</p>
+            </div>
+          </div>
+
+          <button class="new-chat" type="button" @click="newSession" aria-label="新建会话">
+            <span aria-hidden="true">+</span>
+            新建会话
+          </button>
+        </header>
+
+        <section class="conversation" ref="conversationEl" aria-live="polite">
+          <div v-if="messages.length === 0" class="empty-state">
+            <div class="empty-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24">
+                <path d="M7 3v8" />
+                <path d="M5 3v8" />
+                <path d="M9 3v8" />
+                <path d="M5 7h4" />
+                <path d="M17 3v18" />
+                <path d="M15 3h4" />
+                <path d="M4 21 20 5" />
+              </svg>
+            </div>
+            <h2>上传食材图片开始吧</h2>
+            <p>我会识别食材，结合你的描述给出料理建议。</p>
+          </div>
+
+          <article
+            v-for="item in messages"
+            :key="item.id"
+            class="message"
+            :class="`message-${item.role}`"
+          >
+            <div class="message-bubble">
+              <img
+                v-if="item.imagePreview"
+                class="message-image"
+                :src="item.imagePreview"
+                alt="用户上传的食材图片"
+              />
+              <p>{{ item.text }}</p>
+            </div>
+          </article>
+
+          <article v-if="showLoading" class="message message-assistant">
+            <div class="message-bubble loading-bubble">
+              <span></span>
+              <span></span>
+              <span></span>
+            </div>
+          </article>
+        </section>
+
+        <form class="composer" @submit.prevent="sendMessage">
+          <input
+            ref="fileInput"
+            class="file-input"
+            type="file"
+            accept="image/png,image/jpeg,image/webp"
+            @change="selectImage"
+          />
+
+          <button
+            class="icon-button"
+            type="button"
+            @click="openFilePicker"
+            aria-label="上传食材图片"
+            title="上传食材图片"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <rect x="3" y="5" width="18" height="16" rx="2" />
+              <path d="m7 15 3-3 3 3 2-2 2 2" />
+              <circle cx="9" cy="9" r="1.5" />
+            </svg>
+          </button>
+
+          <div v-if="imagePreview" class="preview-chip">
+            <img :src="imagePreview" alt="待发送图片预览" />
+            <button type="button" @click="clearImage" aria-label="移除图片">×</button>
+          </div>
+
+          <label class="sr-only" for="message-input">描述你的食材</label>
+          <textarea
+            id="message-input"
+            v-model="draft"
+            rows="1"
+            placeholder="描述你有的食材..."
+            :disabled="isSending"
+            @keydown.enter.exact.prevent="sendMessage"
+          ></textarea>
+
+          <button
+            class="send-button"
+            type="submit"
+            :disabled="isSending || !canSend"
+            aria-label="发送消息"
+            title="发送"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="m22 2-7 20-4-9-9-4Z" />
+              <path d="M22 2 11 13" />
+            </svg>
+          </button>
+        </form>
+      </main>
+    </div>
+
+    <script src="/app.js"></script>
+  </body>
+</html>
