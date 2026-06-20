@@ -6,7 +6,7 @@ from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 
 from app.db import create_image, get_image, list_messages, list_sessions
-from app.schemas import ChatResponse, MessageRecord, SessionSummary, UploadResponse
+from app.schemas import ChatRequest, ChatResponse, MessageRecord, SessionSummary, UploadResponse
 from app.services.chef import handle_chat
 from app.services.image import validate_image
 from app.services.storage import save_upload
@@ -65,31 +65,23 @@ async def upload_image(
 
 
 @router.post("/chat", response_model=ChatResponse)
-async def chat(
-    session_id: str = Form("default"),
-    message: str = Form(""),
-    url: str = Form(""),
-) -> ChatResponse:
-    cleaned_message = message.strip()
-    cleaned_url = url.strip() or None
-    cleaned_session_id = session_id.strip() or "default"
-
+async def chat(request: ChatRequest) -> ChatResponse:
     return handle_chat(
-        session_id=cleaned_session_id,
-        message=cleaned_message,
-        url=cleaned_url,
+        session_id=request.session_id.strip() or "default",
+        message=request.message,
     )
 
 
 @router.post("/analyze")
 async def analyze_image(file: UploadFile = File(...)) -> dict[str, str | None]:
     upload = await upload_image(session_id="default", file=file)
-    response = await chat(
+    response = await chat(ChatRequest(
         session_id="default",
-        message="请根据这张图片给我私厨建议",
-        url=upload.url,
-    )
+        message=[
+            {"type": "text", "text": "请根据这张图片给我私厨建议"},
+            {"type": "image", "url": upload.url},
+        ],
+    ))
     return {
-        "ingredients_analysis": response.ingredients_analysis,
-        "recipe_suggestion": response.recipe_suggestion or response.message,
+        "recipe_suggestion": response.message,
     }

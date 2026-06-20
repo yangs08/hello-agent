@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+from typing import Any
+
 from app.agents.chef.agent import chef_agent
 
 
 def run_chef_agent(
-    message: str,
+    message: str | list[dict[str, Any]],
     thread_id: str,
 ) -> str:
     config = {

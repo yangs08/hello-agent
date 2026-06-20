@@ -80,11 +80,43 @@ AI_CHEF_CHECKPOINT_DB_PATH=./resource/langgraph_checkpoints.sqlite3
 
 ### `POST /chat`
 
-`multipart/form-data` 参数：
+`application/json` 请求体：
 
 - `session_id`: 会话 ID，默认 `default`。不同 `session_id` 拥有不同会话上下文。
-- `message`: 对话内容，可为空。
-- `url`: 可选图片 URL，由 `/uploads` 返回。
+- `message`: 唯一业务输入，可以是普通文字，也可以是包含文字和图片的 content 数组。
+
+纯文字：
+
+```json
+{
+  "session_id": "default",
+  "message": "今晚两个人，想做快手晚餐"
+}
+```
+
+文字 + 已上传图片 URL：
+
+```json
+{
+  "session_id": "default",
+  "message": [
+    { "type": "text", "text": "能做什么菜？" },
+    { "type": "image", "url": "/images/1" }
+  ]
+}
+```
+
+文字 + base64 图片：
+
+```json
+{
+  "session_id": "default",
+  "message": [
+    { "type": "text", "text": "能做什么菜？" },
+    { "type": "image", "data": "iVBORw0KGgo..." }
+  ]
+}
+```
 
 返回：
 
@@ -92,10 +124,7 @@ AI_CHEF_CHECKPOINT_DB_PATH=./resource/langgraph_checkpoints.sqlite3
 {
   "status": "chat",
   "session_id": "default",
-  "message": "本轮回复",
-  "url": "/images/1",
-  "ingredients_analysis": "图片分析",
-  "recipe_suggestion": null
+  "message": "本轮回复"
 }
 ```
 
@@ -132,7 +161,7 @@ AI_CHEF_CHECKPOINT_DB_PATH=./resource/langgraph_checkpoints.sqlite3
 
 ### `GET /sessions/{session_id}/messages`
 
-列出某个会话窗口的产品侧历史记录，包括图片 URL、文件名、存储路径和图片分析。图片分析在 agent 调用工具后才会回填。
+列出某个会话窗口的产品侧历史记录。
 
 ### `GET /images/{image_id}`
 
@@ -140,4 +169,4 @@ AI_CHEF_CHECKPOINT_DB_PATH=./resource/langgraph_checkpoints.sqlite3
 
 ### `POST /analyze`
 
-兼容旧图片分析入口，内部复用 `/chat` 流程。
+兼容旧图片分析入口，内部复用 `/chat` 流程，返回 `recipe_suggestion`。

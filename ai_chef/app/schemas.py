@@ -1,17 +1,42 @@
 from __future__ import annotations
 
+from typing import Any
 from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
+
+
+class ChatRequest(BaseModel):
+    session_id: str = "default"
+    message: str | list[dict[str, Any]]
+
+    @field_validator("message")
+    @classmethod
+    def validate_message(cls, value: str | list[dict[str, Any]]) -> str | list[dict[str, Any]]:
+        if isinstance(value, str):
+            if not value.strip():
+                raise ValueError("message cannot be empty")
+            return value
+
+        if not value:
+            raise ValueError("message cannot be empty")
+
+        for part in value:
+            part_type = part.get("type")
+            if part_type == "text" and str(part.get("text") or "").strip():
+                return value
+            if part_type == "image" and (part.get("url") or part.get("data")):
+                return value
+            if part_type == "image_url" and part.get("image_url"):
+                return value
+
+        raise ValueError("message must include text or image content")
 
 
 class ChatResponse(BaseModel):
-    status: Literal["chat", "needs_rephrase"]
+    status: Literal["chat"]
     session_id: str
     message: str
-    url: str | None = None
-    ingredients_analysis: str | None = None
-    recipe_suggestion: str | None = None
 
 
 class SessionSummary(BaseModel):
