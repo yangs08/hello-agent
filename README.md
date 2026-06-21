@@ -4,32 +4,20 @@ AI Agent 项目集合，包含多个独立的 AI 应用项目。
 
 ## 项目列表
 
-| 项目 | 状态 | 说明 |
+| 项目 | 语言 | 说明 |
 |------|------|------|
-| [ai_chef](./ai_chef/) | 🚧 开发中 | 会话式 AI 私厨助手 |
-| [photo-score](./photo-score/) | 🚧 开发中 | 摄影图片点评系统 |
-
-## 项目管理
-
-每个子项目遵循统一结构：
-
-```
-project-name/
-├── README.md          # 项目说明
-├── TASK.md           # 任务清单
-├── requirements.txt/pyproject.toml  # 依赖
-└── src/              # 源码
-```
+| [ai_chef](./ai_chef/) | Python (FastAPI) | 会话式 AI 私厨助手 — 支持图片识别、Tavily 搜索、LangGraph 记忆 |
+| [photo-score](./photo-score/) | Python + Vue | 摄影图片点评系统 |
+| [qa-rag](./qa-rag/) | Python (FastAPI) | 企业级 AI Agent 骨架 — Agent 编排、RAG 管道、Milvus |
+| [eino-smart-cs](./eino-smart-cs/) | Go | 基于 Eino 框架的智能客服服务 |
+| [learn-langchain](./learn-langchain/) | Python | LangChain 学习与实验项目 |
 
 ## 快速开始
 
 ```bash
 # 进入具体项目
-cd photo-score
+cd ai_chef
 
-# 查看项目任务
-cat TASK.md
-
-# 安装依赖
+# 安装依赖（Python 项目）
 pip install -r requirements.txt
 ```
