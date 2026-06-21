@@ -10,7 +10,6 @@ AI Agent 项目集合，包含多个独立的 AI 应用项目。
 | [photo-score](./photo-score/) | Python + Vue | 摄影图片点评系统 |
 | [qa-rag](./qa-rag/) | Python (FastAPI) | 企业级 AI Agent 骨架 — Agent 编排、RAG 管道、Milvus |
 | [eino-smart-cs](./eino-smart-cs/) | Go | 基于 Eino 框架的智能客服服务 |
-| [learn-langchain](./learn-langchain/) | Python | LangChain 学习与实验项目 |
 
 ## 快速开始
 
